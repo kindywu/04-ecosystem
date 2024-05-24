@@ -1,0 +1,6 @@
+
+### http_serve
+GET http://127.0.0.1:8081
+
+### minigix
+GET http://127.0.0.1:8080
