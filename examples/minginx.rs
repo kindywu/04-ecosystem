@@ -1,7 +1,7 @@
 use anyhow::Result;
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 use tokio::{
-    io::{self},
+    io,
     net::{TcpListener, TcpStream},
     sync::mpsc::{self, Receiver},
 };
@@ -43,19 +43,37 @@ async fn main() -> Result<()> {
 }
 
 async fn handle(upstream_addr: &str, mut rx: Receiver<TcpStream>) -> Result<()> {
+    // let upstream_addr = upstream_addr.parse()?;
+    // let socket = tokio::net::TcpSocket::new_v4()?;
+    // socket.set_keepalive(true)?;
+    // let mut upstream = socket.connect(upstream_addr).await?;
     let mut upstream = TcpStream::connect(upstream_addr).await?;
-    info!("upstream: {:?}", &upstream);
+
+    info!("Handle upstream: {:?}", &upstream);
     let (mut upstream_reader, mut upstream_writer) = upstream.split();
 
     // pipe the stream
     while let Some(mut client) = rx.recv().await {
-        info!("client: {:?}", &client);
+        // {
+        //     // 发送HTTP请求
+        //     let request = b"GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n";
+        //     upstream_writer.write_all(request).await?;
+
+        //     // 读取HTTP响应
+        //     let mut buffer = [0u8; 8 * 1024];
+        //     let n = upstream_reader.read(&mut buffer).await?;
+        //     info!("{n} {buffer:?}");
+        // }
+
+        info!("Handle receive client: {}", &client.peer_addr()?);
         // cargo add tokio --features net
         let (mut client_reader, mut client_writer) = client.split();
 
         // cargo add tokio --features io-util
-        let client_to_stream = io::copy(&mut client_reader, &mut upstream_writer);
-        let stream_to_client = io::copy(&mut upstream_reader, &mut client_writer);
+        // let client_to_stream = io::copy(&mut client_reader, &mut upstream_writer);
+        // let stream_to_client = io::copy(&mut upstream_reader, &mut client_writer);
+        let client_to_stream = async_copy(&mut client_reader, &mut upstream_writer);
+        let stream_to_client = async_copy(&mut upstream_reader, &mut client_writer);
 
         match tokio::try_join!(client_to_stream, stream_to_client) {
             Ok((n, m)) => info!(
@@ -65,31 +83,41 @@ async fn handle(upstream_addr: &str, mut rx: Receiver<TcpStream>) -> Result<()> 
             Err(e) => warn!("error proxying: {:?}", e),
         }
 
-        info!("client: {:?}", &client);
+        info!("client' request is handed: {:?}", &client);
     }
 
     Ok(())
 }
 
-// async fn async_copy<R, W>(mut reader: R, mut writer: W) -> io::Result<u64>
-// where
-//     R: AsyncReadExt + Unpin,
-//     W: AsyncWriteExt + Unpin,
-// {
-//     let mut buffer = [0u8; 8 * 1024]; // 8KB buffer
-//     let mut total_bytes_copied = 0;
+#[allow(dead_code)]
+async fn async_copy<'a, R, W>(reader: &'a mut R, writer: &'a mut W) -> tokio::io::Result<usize>
+where
+    R: tokio::io::AsyncReadExt + Unpin + Debug,
+    W: tokio::io::AsyncWriteExt + Unpin + Debug,
+{
+    let mut buffer = [0u8; 8 * 1024]; // 8KB buffer
+    let mut total_bytes_copied = 0;
 
-//     loop {
-//         let n = match reader.read(&mut buffer).await {
-//             Ok(0) => return Ok(total_bytes_copied), // EOF
-//             Ok(n) => n,
-//             Err(e) => return Err(e),
-//         };
+    // loop {
+    let n = match reader.read(&mut buffer).await {
+        Ok(0) => return Ok(total_bytes_copied), // EOF
+        Ok(n) => n,
+        Err(e) => match e.kind() {
+            io::ErrorKind::ConnectionAborted => {
+                info!("reader: {:?}", reader);
+                info!("writer: {:?}", writer);
+                return Err(e);
+            }
+            _ => return Err(e),
+        },
+    };
 
-//         writer.write_all(&buffer[..n]).await?;
-//         total_bytes_copied += n as u64;
-//     }
-// }
+    writer.write_all(&buffer[..n]).await?;
+    total_bytes_copied += n;
+    // }
+
+    Ok(total_bytes_copied)
+}
 
 #[derive(Debug)]
 struct Config {
