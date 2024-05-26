@@ -26,36 +26,29 @@ async fn main() -> Result<()> {
     // 建立连接
     let mut upstream = TcpStream::connect(upstream_addr).await?;
 
-    // 发送数据
-    let data = b"Hello, server!";
-    upstream.write_all(data).await?;
-    info!("Send data {:?}", data);
+    let (mut upstream_reader, mut upstream_writer) = upstream.split();
 
-    read(&mut upstream).await?;
+    for i in 1..=3 {
+        info!("round {}", i);
+        // 发送数据
+        let data = b"Hello, server!";
+        upstream_writer.write_all(data).await?;
+        info!("Send data {:?}", data);
 
-    // 假设我们想要再次发送数据
-    let more_data = b"More data!";
-    upstream.write_all(more_data).await?;
+        let mut buf = vec![0; 1024];
+        // 从socket读取数据
+        let n = upstream_reader.read(&mut buf).await?;
 
-    read(&mut upstream).await?;
-    // 继续使用连接...
+        if n == 0 {
+            // 如果读取到的数据长度为0，表示对方已经关闭连接
+            println!("Client disconnected.");
+            return Ok(());
+        }
 
-    Ok(())
-}
-
-async fn read(upstream: &mut TcpStream) -> Result<()> {
-    let mut buf = vec![0; 1024];
-    // 从socket读取数据
-    let n = upstream.read(&mut buf).await?;
-
-    if n == 0 {
-        // 如果读取到的数据长度为0，表示对方已经关闭连接
-        println!("Client disconnected.");
-        return Ok(());
+        // 打印读取到的数据
+        println!("Received from client: {:?}", &buf[..n]);
     }
 
-    // 打印读取到的数据
-    println!("Received from client: {:?}", &buf[..n]);
     Ok(())
 }
 
