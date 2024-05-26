@@ -1,3 +1,4 @@
+use chrono::Local;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 
@@ -39,5 +40,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 }
 
 async fn hello(_: Request<hyper::body::Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    Ok(Response::new(Full::new(Bytes::from("Hello, World!"))))
+    let body = format!("Hello, World! Now is {}", Local::now());
+    Ok(Response::new(Full::new(Bytes::from(body))))
 }
