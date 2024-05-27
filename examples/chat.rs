@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, net::SocketAddr, str::FromStr, sync::Arc};
 
 use anyhow::Result;
 use tokio::{
@@ -11,44 +11,46 @@ use futures::{SinkExt, StreamExt};
 use tracing::{error, info, level_filters::LevelFilter, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
+const MAX_MESSAGES: usize = 128;
+
+// 监听端口
+// 接受客户请求
+// 将stream转为framed
+// 接受客户输入姓名
+// 等待输入
+// 接受网络流，进行广播
+// 接受广播，写入网络流（过滤发送者）
 #[tokio::main]
 async fn main() -> Result<()> {
-    // 监听端口
-    // 接受客户请求
-    // 将stream转为framed
-    // 接受客户输入姓名
-    // 等待输入
-    // 接受流，进行广播
-    // 接受广播，写入流
-    let (tx, mut _rx) = broadcast::channel::<Msg>(16);
+    let (tx, mut _rx) = broadcast::channel::<Arc<Msg>>(MAX_MESSAGES);
     let layer = tracing_subscriber::fmt::Layer::new().with_filter(LevelFilter::INFO);
     tracing_subscriber::registry().with(layer).init();
-    let server_addr = "127.0.0.1:9090";
 
-    let listen = TcpListener::bind(server_addr).await?;
-    info!("Chat server listen on {server_addr}");
+    let server_socket: SocketAddr = SocketAddr::from_str("127.0.0.1:9090")?;
+
+    let listen = TcpListener::bind(server_socket).await?;
+    info!("Chat server listen on {server_socket}");
 
     loop {
-        let (stream, client_addr) = listen.accept().await?;
-        info!("Chat server accept client from {client_addr}");
+        let (stream, client_socket) = listen.accept().await?;
+        info!("Chat server accept client from {client_socket}");
         let tx = tx.clone();
         let rx = tx.subscribe();
         tokio::spawn(async move {
-            let client_addr = client_addr.to_string();
-            if let Err(e) = handle_client(stream, &client_addr, server_addr, tx, rx).await {
+            if let Err(e) = handle_client(stream, client_socket, server_socket, tx, rx).await {
                 error!("{e}")
             }
-            info!("Client {client_addr} left");
+            info!("Client {client_socket} left");
         });
     }
 }
 
 async fn handle_client(
     stream: TcpStream,
-    client_addr: &str,
-    server_addr: &str,
-    tx: Sender<Msg>,
-    mut rx: Receiver<Msg>,
+    client_socket: SocketAddr,
+    server_socket: SocketAddr,
+    tx: Sender<Arc<Msg>>,
+    mut rx: Receiver<Arc<Msg>>,
 ) -> Result<()> {
     let stream = Framed::new(stream, LinesCodec::new());
     let (mut stream_sender, mut stream_receiver) = stream.split();
@@ -66,11 +68,8 @@ async fn handle_client(
         }
     };
 
-    let sender_addr = client_addr.to_string();
-    let peer_addr = sender_addr.clone();
-
     tokio::spawn(async move {
-        let join_msg = Msg::new(sender_addr.clone(), MsgBody::joined(user_name.clone()));
+        let join_msg = Arc::new(Msg::new(client_socket, MsgBody::joined(user_name.clone())));
 
         if let Err(e) = tx.send(join_msg) {
             error!("Send user: {user_name} joined message failed with error: {e}");
@@ -81,19 +80,22 @@ async fn handle_client(
             let line = match line {
                 Ok(line) => line,
                 Err(e) => {
-                    warn!("Failed to read line from {}: {}", sender_addr, e);
+                    warn!("Failed to read line from {}: {}", client_socket, e);
                     break;
                 }
             };
 
-            let chat_msg = Msg::new(sender_addr.clone(), MsgBody::chat(user_name.clone(), line));
+            let chat_msg = Arc::new(Msg::new(
+                client_socket,
+                MsgBody::chat(user_name.clone(), line),
+            ));
             if let Err(e) = tx.send(chat_msg) {
                 error!("Send user: {user_name} left message failed with error: {e}");
                 return;
             }
         }
 
-        let left_msg = Msg::new(sender_addr.clone(), MsgBody::left(user_name.clone()));
+        let left_msg = Arc::new(Msg::new(client_socket, MsgBody::left(user_name.clone())));
         if let Err(e) = tx.send(left_msg) {
             error!("Send user: {user_name} left message failed with error: {e}")
         }
@@ -104,14 +106,14 @@ async fn handle_client(
         let msg = match msg {
             Ok(msg) => msg,
             Err(e) => {
-                warn!("Failed to read line from {}: {}", server_addr, e);
+                warn!("Failed to read line from {}: {}", server_socket, e);
                 break;
             }
         };
 
-        if msg.sender_addr != peer_addr {
+        if msg.sender_socket != client_socket {
             if let Err(e) = stream_sender.send(msg.to_string()).await {
-                warn!("Failed to send message to {}: {}", server_addr, e);
+                warn!("Failed to send message to {}: {}", server_socket, e);
                 break;
             }
         }
@@ -120,16 +122,16 @@ async fn handle_client(
     Ok(())
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Msg {
-    sender_addr: String,
+    sender_socket: SocketAddr,
     msg_body: MsgBody,
 }
 
 impl Msg {
-    fn new(sender_addr: String, msg_body: MsgBody) -> Self {
+    fn new(sender_socket: SocketAddr, msg_body: MsgBody) -> Self {
         Self {
-            sender_addr,
+            sender_socket,
             msg_body,
         }
     }
@@ -140,7 +142,7 @@ impl Display for Msg {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 enum MsgBody {
     UserJoined(String),
     UserLeft(String),
