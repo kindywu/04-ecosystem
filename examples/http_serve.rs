@@ -4,10 +4,10 @@ use std::net::SocketAddr;
 
 use http_body_util::Full;
 use hyper::body::Bytes;
-use hyper::server::conn::http1;
+use hyper::server::conn::http2;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
-use hyper_util::rt::TokioIo;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use tokio::net::TcpListener;
 
 #[tokio::main]
@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Spawn a tokio task to serve multiple connections concurrently
         tokio::task::spawn(async move {
             // Finally, we bind the incoming connection to our `hello` service
-            if let Err(err) = http1::Builder::new()
+            if let Err(err) = http2::Builder::new(TokioExecutor::new())
                 // `service_fn` converts our function in a `Service`
                 .serve_connection(io, service_fn(hello))
                 .await

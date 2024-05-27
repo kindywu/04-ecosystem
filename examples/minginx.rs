@@ -3,9 +3,8 @@ use std::{fmt::Debug, sync::Arc};
 use tokio::{
     io,
     net::{TcpListener, TcpStream},
-    sync::mpsc::{self, Receiver},
 };
-use tracing::{error, info, level_filters::LevelFilter, warn};
+use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::{fmt::Layer, layer::SubscriberExt, util::SubscriberInitExt, Layer as _};
 
 #[tokio::main]
@@ -26,67 +25,35 @@ async fn main() -> Result<()> {
         ));
     }
 
-    let (tx, rx) = mpsc::channel::<TcpStream>(10);
-
-    tokio::spawn(async move {
-        if let Err(e) = handle(&config.upstream_addr, rx).await {
-            error!("handle with {}", e)
-        }
-    });
-
     loop {
-        let (client, addr) = listener.accept().await?;
+        let (mut client, addr) = listener.accept().await?;
         info!("Accept client {}", &addr);
-        tx.send(client).await?;
-        info!("Send client to rx {}", &addr);
+        let upstream_addr = config.upstream_addr.clone();
+        tokio::spawn(async move {
+            let mut upstream = TcpStream::connect(upstream_addr).await?;
+
+            let upstream_local_addr = upstream.local_addr()?;
+            let (mut client_read, mut client_write) = client.split();
+            let (mut upstream_read, mut upstream_write) = upstream.split();
+
+            loop {
+                info!("Proxy Loop on Upstream {upstream_local_addr} Client {addr}");
+                let client_to_upstream = io::copy(&mut client_read, &mut upstream_write);
+                let upstream_to_client = io::copy(&mut upstream_read, &mut client_write);
+                match tokio::try_join!(client_to_upstream, upstream_to_client) {
+                    Ok((n, m)) => {
+                        info!("Proxy {n} bytes from client to upstream, {m} bytes from upstream to client");
+                        if n == 0 || m == 0 {
+                            break;
+                        }
+                    }
+                    Err(e) => warn!("error proxying: {:?}", e),
+                }
+            }
+            info!("Proxy Quit");
+            Ok::<(), anyhow::Error>(())
+        });
     }
-}
-
-async fn handle(upstream_addr: &str, mut rx: Receiver<TcpStream>) -> Result<()> {
-    // let upstream_addr = upstream_addr.parse()?;
-    // let socket = tokio::net::TcpSocket::new_v4()?;
-    // socket.set_keepalive(true)?;
-    // let mut upstream = socket.connect(upstream_addr).await?;
-    let mut upstream = TcpStream::connect(upstream_addr).await?;
-
-    info!("Handle upstream: {:?}", &upstream);
-    let (mut upstream_reader, mut upstream_writer) = upstream.split();
-
-    // pipe the stream
-    while let Some(mut client) = rx.recv().await {
-        // {
-        //     // 发送HTTP请求
-        //     let request = b"GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n";
-        //     upstream_writer.write_all(request).await?;
-
-        //     // 读取HTTP响应
-        //     let mut buffer = [0u8; 8 * 1024];
-        //     let n = upstream_reader.read(&mut buffer).await?;
-        //     info!("{n} {buffer:?}");
-        // }
-
-        info!("Handle receive client: {}", &client.peer_addr()?);
-        // cargo add tokio --features net
-        let (mut client_reader, mut client_writer) = client.split();
-
-        // cargo add tokio --features io-util
-        // let client_to_stream = io::copy(&mut client_reader, &mut upstream_writer);
-        // let stream_to_client = io::copy(&mut upstream_reader, &mut client_writer);
-        let client_to_stream = async_copy(&mut client_reader, &mut upstream_writer);
-        let stream_to_client = async_copy(&mut upstream_reader, &mut client_writer);
-
-        match tokio::try_join!(client_to_stream, stream_to_client) {
-            Ok((n, m)) => info!(
-                "proxied {} bytes from client to upstream, {} bytes from upstream to client",
-                n, m
-            ),
-            Err(e) => warn!("error proxying: {:?}", e),
-        }
-
-        info!("client' request is handed: {:?}", &client);
-    }
-
-    Ok(())
 }
 
 #[allow(dead_code)]

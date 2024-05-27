@@ -3,8 +3,13 @@
 GET http://127.0.0.1:8081
 
 ### minigix
+
 GET http://127.0.0.1:8080 HTTP/1.1
 Connection: keep-alive
+Keep-Alive: timeout=5, max=1000
 
 ### minigix
 GET http://127.0.0.1:8080
+
+### minigix
+GET http://127.0.0.1:8080 HTTP/2.0
