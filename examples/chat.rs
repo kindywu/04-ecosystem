@@ -7,7 +7,7 @@ use tokio::{
 };
 use tokio_util::codec::{Framed, LinesCodec};
 
-use futures::{SinkExt, StreamExt};
+use futures::{stream::SplitStream, SinkExt, StreamExt};
 use tracing::{error, info, level_filters::LevelFilter, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
@@ -48,7 +48,7 @@ async fn main() -> Result<()> {
 async fn handle_client(
     stream: TcpStream,
     client_socket: SocketAddr,
-    server_socket: SocketAddr,
+    _server_socket: SocketAddr,
     tx: Sender<Arc<Msg>>,
     mut rx: Receiver<Arc<Msg>>,
 ) -> Result<()> {
@@ -68,58 +68,70 @@ async fn handle_client(
         }
     };
 
+    let join_msg = Arc::new(Msg::new(client_socket, MsgBody::joined(user_name.clone())));
+
+    if let Err(e) = tx.send(join_msg) {
+        error!("Send user: {user_name} joined message failed with error: {e}");
+        return Ok(());
+    }
+
     tokio::spawn(async move {
-        let join_msg = Arc::new(Msg::new(client_socket, MsgBody::joined(user_name.clone())));
-
-        if let Err(e) = tx.send(join_msg) {
-            error!("Send user: {user_name} joined message failed with error: {e}");
-            return;
-        }
-
-        while let Some(line) = stream_receiver.next().await {
-            let line = match line {
-                Ok(line) => line,
-                Err(e) => {
-                    warn!("Failed to read line from {}: {}", client_socket, e);
-                    break;
-                }
-            };
-
-            let chat_msg = Arc::new(Msg::new(
-                client_socket,
-                MsgBody::chat(user_name.clone(), line),
-            ));
-            if let Err(e) = tx.send(chat_msg) {
-                error!("Send user: {user_name} left message failed with error: {e}");
-                return;
-            }
-        }
-
-        let left_msg = Arc::new(Msg::new(client_socket, MsgBody::left(user_name.clone())));
-        if let Err(e) = tx.send(left_msg) {
-            error!("Send user: {user_name} left message failed with error: {e}")
-        }
+        handle_msg_from_client(user_name, client_socket, tx, stream_receiver).await;
     });
 
+    // handle_send_msg_to_client
     loop {
         let msg = rx.recv().await;
         let msg = match msg {
             Ok(msg) => msg,
             Err(e) => {
-                warn!("Failed to read line from {}: {}", server_socket, e);
+                warn!("Failed to read msg from rx: {}", e);
                 break;
             }
         };
 
         if msg.sender_socket != client_socket {
             if let Err(e) = stream_sender.send(msg.to_string()).await {
-                warn!("Failed to send message to {}: {}", server_socket, e);
+                warn!("Failed to send message to stream_sender: {}", e);
                 break;
             }
+        } else if let MsgBody::UserLeft(_) = msg.msg_body {
+            break;
         }
     }
 
     Ok(())
+}
+
+async fn handle_msg_from_client(
+    user_name: String,
+    client_socket: SocketAddr,
+    tx: Sender<Arc<Msg>>,
+    mut stream_receiver: SplitStream<Framed<TcpStream, LinesCodec>>,
+) {
+    while let Some(line) = stream_receiver.next().await {
+        let line = match line {
+            Ok(line) => line,
+            Err(e) => {
+                warn!("Failed to read line from stream_receiver: {}", e);
+                break;
+            }
+        };
+
+        let chat_msg = Arc::new(Msg::new(
+            client_socket,
+            MsgBody::chat(user_name.clone(), line),
+        ));
+        if let Err(e) = tx.send(chat_msg) {
+            warn!("Failed to send msg to user:{} tx: {}", user_name, e);
+            return;
+        }
+    }
+
+    let left_msg = Arc::new(Msg::new(client_socket, MsgBody::left(user_name.clone())));
+    if let Err(e) = tx.send(left_msg) {
+        error!("Send user: {user_name} left message failed with error: {e}")
+    }
 }
 
 #[derive(Debug)]
