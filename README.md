@@ -1,4 +1,15 @@
 # 初始化
+- sudo apt update
+- sudo apt install python3-pip
+- sudo apt install python3-venv
+
+- cargo install cargo-generate
+- pipx install pre-commit
+- pre-commit install
+- cargo install cargo-deny --locked
+- cargo install typos-cli
+- cargo install git-cliff
+- cargo install cargo-nextest --locked
 
 - cargo generate tyr-rust-bootcamp/template
 - update master -> main

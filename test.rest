@@ -13,3 +13,17 @@ GET http://127.0.0.1:8080
 
 ### minigix
 GET http://127.0.0.1:8080 HTTP/2.0
+
+### shortener
+GET http://127.0.0.1:3000
+
+### shortener redirect
+GET http://127.0.0.1:3000/X_2C4H HTTP/1.1
+
+### shortener shortener
+POST http://127.0.0.1:3000/shortener HTTP/1.1
+content-type: application/json
+
+{
+    "url":"www.tencent.com"
+}
