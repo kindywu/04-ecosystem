@@ -115,7 +115,7 @@ impl AppState {
                     if let Some(code) = e.code() {
                         if code == UNIQUE_CONSTRAINT_ERROR {
                             warn!(
-                                "The {} encounter the postgreSQL 23505: unique_violation, try again!",
+                                "The {} encounter {UNIQUE_CONSTRAINT_ERROR}: unique_violation, try again!",
                                 i + 1
                             );
                             continue;
