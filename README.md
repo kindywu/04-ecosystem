@@ -10,3 +10,8 @@
 - git commit -a -m "init" or git commit --amend
 - git remote add origin https://github.com/kindywu/04-ecosystem.git
 - git push -u origin main
+- git commit --amend
+
+- fix: 2024-05-28 00:32:41 [ERROR] failed to open advisory database: "/home/vscode/.cargo/advisory-db/github.com-2f857891b7f43c59"
+- rm -rf /home/vscode/.cargo/advisory-db/
+- git clone https://github.com/RustSec/advisory-db.git /home/vscode/.cargo/advisory-db/github.com-2f857891b7f43c59

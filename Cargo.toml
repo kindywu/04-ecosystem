@@ -9,11 +9,13 @@ edition = "2021"
 anyhow = "1.0.86"
 chrono = "0.4.38"
 dashmap = "5.5.3"
+derive_builder = "0.20.0"
 futures = "0.3.30"
 http-body-util = "0.1.1"
 hyper = { version = "1.3.1", features = ["full"] }
 hyper-util = { version = "0.1.3", features = ["full"] }
 s2n-quic = "1.37.0"
+strum = { version = "0.26.2", features = ["derive"] }
 tokio = { version = "1.37.0", features = [
     "rt",
     "rt-multi-thread",
