@@ -157,13 +157,13 @@ impl AppState {
                             continue;
                         }
                     }
-                    return Err(ShortenError::UrlMaxTrySave);
+                    return Err(ShortenError::Unknown);
                 }
                 Err(e) => return Err(ShortenError::DatabaseError(e)),
             }
         }
 
-        Err(ShortenError::Unknown)
+        Err(ShortenError::UrlMaxTrySave)
     }
 
     async fn get_url(&self, id: &str) -> Result<String, ShortenError> {

@@ -1,7 +1,7 @@
 // $env:DATABASE_URL = "postgres://kindy:kindy@localhost:5432/shortener"
 
 use anyhow::Result;
-use sqlx::{query_as, Executor, FromRow, PgPool, Postgres};
+use sqlx::{query_as, FromRow, PgPool, Pool, Postgres};
 
 const PG_URL: &str = "postgres://kindy:kindy@localhost:5432/shortener";
 
@@ -16,26 +16,34 @@ pub struct Url {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let pool = PgPool::connect(PG_URL).await?;
-    // let id = "X_2C4H";
-    let id = "id_not_exist";
-    if let Some(url) = get_url(&pool, id).await? {
-        println!("{}=>{}", url.id, url.url)
-    } else {
-        println!("{} not found", id)
+    {
+        let id = "X_2C4H";
+        let url_record = query_as!(Url, r#"SELECT id, url FROM urls WHERE id = $1"#, id)
+            .fetch_optional(&pool)
+            .await?;
+        println!("{:?} ", url_record);
     }
 
-    let uri = "www.bing.com";
+    {
+        let id = "id_not_exist";
+        if let Some(url) = get_url(&pool, id).await? {
+            println!("{}=>{}", url.id, url.url)
+        } else {
+            println!("{} not found", id)
+        }
+    }
 
-    let id = shorten(&pool, uri).await?;
-    println!("id is {}", id);
+    {
+        let uri = "www.bing.com";
+
+        let id = shorten(&pool, uri).await?;
+        println!("id is {}", id);
+    }
 
     Ok(())
 }
 
-async fn get_url<'e, E>(executor: E, id: &str) -> Result<Option<Url>>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+async fn get_url(executor: &Pool<Postgres>, id: &str) -> Result<Option<Url>> {
     let url_record = query_as!(Url, r#"SELECT id, url FROM urls WHERE id = $1"#, id)
         .fetch_optional(executor)
         .await?;
@@ -47,22 +55,34 @@ pub struct Id {
     id: String,
 }
 
-async fn shorten<'e, E>(executor: E, uri: &str) -> Result<String>
-where
-    E: Executor<'e, Database = Postgres>,
-{
+async fn shorten(executor: &Pool<Postgres>, uri: &str) -> Result<String> {
     let id = nanoid::nanoid!(6);
 
-    let result = query_as!(
-        Id,
-        r#"
-            INSERT INTO urls (id, url) VALUES ($1, $2)
-            ON CONFLICT(url) DO UPDATE SET url=EXCLUDED.url RETURNING id
-            "#,
-        &id,
-        &uri
-    )
-    .fetch_one(executor)
-    .await?;
-    Ok(result.id)
+    for _ in 1..3 {
+        let result = query_as!(
+            Id,
+            r#"
+                INSERT INTO urls (id, url) VALUES ($1, $2)
+                ON CONFLICT(url) DO UPDATE SET url=EXCLUDED.url RETURNING id
+                "#,
+            &id,
+            &uri
+        )
+        .fetch_one(executor)
+        .await;
+
+        match result {
+            Ok(url) => return Ok(url.id),
+            Err(sqlx::Error::Database(e)) => {
+                if let Some(code) = e.code() {
+                    if code == "23505" {
+                        continue;
+                    }
+                }
+                return Err(anyhow::anyhow!("max try"));
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+    Err(anyhow::anyhow!("max try"))
 }
