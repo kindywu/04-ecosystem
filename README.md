@@ -1,4 +1,5 @@
 # 初始化
+
 - sudo apt update
 - sudo apt install python3-pip
 - sudo apt install python3-venv
@@ -26,3 +27,6 @@
 - fix: 2024-05-28 00:32:41 [ERROR] failed to open advisory database: "/home/vscode/.cargo/advisory-db/github.com-2f857891b7f43c59"
 - rm -rf /home/vscode/.cargo/advisory-db/
 - git clone https://github.com/RustSec/advisory-db.git /home/vscode/.cargo/advisory-db/github.com-2f857891b7f43c59
+
+- git tag -a v4-ecosystem-url-shortener
+- git push origin v4-ecosystem-url-shortener

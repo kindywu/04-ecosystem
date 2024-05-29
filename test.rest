@@ -25,5 +25,5 @@ POST http://127.0.0.1:3000/shortener HTTP/1.1
 content-type: application/json
 
 {
-    "url":"www.tencent.com"
+    "uri":"www.roblox.com"
 }
