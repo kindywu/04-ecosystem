@@ -17,6 +17,8 @@
 - pre-commit install
 - update cliff.toml postprocessors.replace = https://github.com/kindywu/04-ecosystem
 
+# Git
+
 - git status
 - git add .
 - git commit -a -m "init" or git commit --amend
@@ -30,3 +32,8 @@
 
 - git tag -a v4-ecosystem-url-shortener
 - git push origin v4-ecosystem-url-shortener
+
+# sqlx macros
+
+- windows: $env:DATABASE_URL="postgres://kindy:kindy@localhost:5432/shortener"
+- linux: export DATABASE_URL=postgres://kindy:kindy@postgresql-postgresql-master-1:5432/shortener

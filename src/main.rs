@@ -1,9 +1,9 @@
-// $env:DATABASE_URL = "postgres://kindy:kindy@localhost:5432/shortener"
+extern crate dotenv;
 
 use anyhow::Result;
+use dotenv::dotenv;
 use sqlx::{query_as, FromRow, PgPool, Pool, Postgres};
-
-const PG_URL: &str = "postgres://kindy:kindy@localhost:5432/shortener";
+use std::env;
 
 #[derive(Debug, FromRow)]
 pub struct Url {
@@ -15,7 +15,11 @@ pub struct Url {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let pool = PgPool::connect(PG_URL).await?;
+    dotenv().ok();
+
+    let pg_url = env::var("DATABASE_URL").expect("无法读取数据库连接");
+
+    let pool = PgPool::connect(&pg_url).await?;
     {
         let id = "X_2C4H";
         let url_record = query_as!(Url, r#"SELECT id, url FROM urls WHERE id = $1"#, id)
