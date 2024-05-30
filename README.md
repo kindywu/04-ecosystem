@@ -37,3 +37,8 @@
 
 - windows: $env:DATABASE_URL="postgres://kindy:kindy@localhost:5432/shortener"
 - linux: export DATABASE_URL=postgres://kindy:kindy@postgresql-postgresql-master-1:5432/shortener
+
+# tokio console
+
+- windows: $env:RUSTFLAGS="--cfg tokio_unstable"; cargo run --example chat
+- windows: tokio-console

@@ -28,6 +28,8 @@ async fn main() -> Result<()> {
     let layer = tracing_subscriber::fmt::Layer::new().with_filter(LevelFilter::INFO);
     tracing_subscriber::registry().with(layer).init();
 
+    // console_subscriber::init();
+
     let server_socket: SocketAddr = SocketAddr::from_str("127.0.0.1:9090")?;
 
     let listen = TcpListener::bind(server_socket).await?;

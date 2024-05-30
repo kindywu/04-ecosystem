@@ -3,12 +3,14 @@ name = "ecosystem"
 version = "0.1.0"
 edition = "2021"
 
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0.86"
 axum = { version = "0.7.5", features = ["http2", "query", "tracing"] }
 chrono = "0.4.38"
+console-subscriber = "0.2.0"
 dashmap = "5.5.3"
 derive_builder = "0.20.0"
 dns-lookup = "2.0.4"
@@ -17,11 +19,17 @@ futures = "0.3.30"
 http-body-util = "0.1.1"
 hyper = { version = "1.3.1", features = ["full"] }
 hyper-util = { version = "0.1.3", features = ["full"] }
+loom = "0.7.2"
 nanoid = "0.4.0"
 s2n-quic = "1.37.0"
 serde = "1.0.203"
 serde_json = "1.0.117"
-sqlx = { version = "0.7.4", features = ["postgres", "runtime-tokio", "tls-rustls", "macros"] }
+sqlx = { version = "0.7.4", features = [
+    "postgres",
+    "runtime-tokio",
+    "tls-rustls",
+    "macros",
+] }
 strum = { version = "0.26.2", features = ["derive"] }
 thiserror = "1.0.61"
 tokio = { version = "1.37.0", features = [
@@ -30,7 +38,9 @@ tokio = { version = "1.37.0", features = [
     "macros",
     "net",
     "io-util",
+    "tracing",
 ] }
+tokio-console = "0.1.10"
 tokio-stream = "0.1.15"
 tokio-util = { version = "0.7.11", features = ["codec"] }
 tracing = "0.1.40"
