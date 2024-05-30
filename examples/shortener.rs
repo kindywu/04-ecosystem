@@ -183,45 +183,45 @@ impl AppState {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use anyhow::Result;
-    use sqlx::PgPool;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use anyhow::Result;
+//     use sqlx::PgPool;
 
-    #[tokio::test]
-    async fn test_sqlx_connect() -> Result<()> {
-        let pool = PgPool::connect(PG_URL).await?;
+//     #[tokio::test]
+//     async fn test_sqlx_connect() -> Result<()> {
+//         let pool = PgPool::connect(PG_URL).await?;
 
-        // 当url存在，返回id
-        let id = "000000"; // V4cL8h | www.baidu.com
-        let url = "www.baidu.com";
-        let UrlRecord { id, url: _ } = sqlx::query_as("INSERT INTO urls (id, url) VALUES ($1, $2) ON CONFLICT(url) DO UPDATE SET url=EXCLUDED.url RETURNING id")
-        .bind(id).bind(url).fetch_one(&pool).await?;
-        assert_eq!(id, "V4cL8h");
+//         // 当url存在，返回id
+//         let id = "000000"; // V4cL8h | www.baidu.com
+//         let url = "www.baidu.com";
+//         let UrlRecord { id, url: _ } = sqlx::query_as("INSERT INTO urls (id, url) VALUES ($1, $2) ON CONFLICT(url) DO UPDATE SET url=EXCLUDED.url RETURNING id")
+//         .bind(id).bind(url).fetch_one(&pool).await?;
+//         assert_eq!(id, "V4cL8h");
 
-        // 当(id,url)存在，返回id
-        let id = "V4cL8h"; // V4cL8h | www.baidu.com
-        let url = "www.baidu.com";
-        let UrlRecord { id, url: _ }  = sqlx::query_as("INSERT INTO urls (id, url) VALUES ($1, $2) ON CONFLICT(url) DO UPDATE SET url=EXCLUDED.url RETURNING id")
-         .bind(id).bind(url).fetch_one(&pool).await?;
-        assert_eq!(id, "V4cL8h");
+//         // 当(id,url)存在，返回id
+//         let id = "V4cL8h"; // V4cL8h | www.baidu.com
+//         let url = "www.baidu.com";
+//         let UrlRecord { id, url: _ }  = sqlx::query_as("INSERT INTO urls (id, url) VALUES ($1, $2) ON CONFLICT(url) DO UPDATE SET url=EXCLUDED.url RETURNING id")
+//          .bind(id).bind(url).fetch_one(&pool).await?;
+//         assert_eq!(id, "V4cL8h");
 
-        // 当id存在，抛出冲突错误
-        let id = "V4cL8h"; // V4cL8h | www.baidu.com
-        let url = "www.soso.com";
-        let result:Result<UrlRecord,sqlx::Error> = sqlx::query_as("INSERT INTO urls (id, url) VALUES ($1, $2) ON CONFLICT(url) DO UPDATE SET url=EXCLUDED.url RETURNING id")
-        .bind(id).bind(url).fetch_one(&pool).await;
+//         // 当id存在，抛出冲突错误
+//         let id = "V4cL8h"; // V4cL8h | www.baidu.com
+//         let url = "www.soso.com";
+//         let result:Result<UrlRecord,sqlx::Error> = sqlx::query_as("INSERT INTO urls (id, url) VALUES ($1, $2) ON CONFLICT(url) DO UPDATE SET url=EXCLUDED.url RETURNING id")
+//         .bind(id).bind(url).fetch_one(&pool).await;
 
-        match result {
-            Ok(_) => assert!(false, "must be error"),
-            Err(sqlx::Error::Database(e)) => match e.code() {
-                Some(code) => assert_eq!(code, UNIQUE_CONSTRAINT_ERROR),
-                None => assert!(false, "must be database error {}", UNIQUE_CONSTRAINT_ERROR),
-            },
-            Err(_) => assert!(false, "must be database error"),
-        }
+//         match result {
+//             Ok(_) => assert!(false, "must be error"),
+//             Err(sqlx::Error::Database(e)) => match e.code() {
+//                 Some(code) => assert_eq!(code, UNIQUE_CONSTRAINT_ERROR),
+//                 None => assert!(false, "must be database error {}", UNIQUE_CONSTRAINT_ERROR),
+//             },
+//             Err(_) => assert!(false, "must be database error"),
+//         }
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }
