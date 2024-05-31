@@ -1,7 +1,8 @@
-use std::{fmt::Display, net::SocketAddr, str::FromStr, sync::Arc};
-
 use anyhow::Result;
 use derive_builder::Builder;
+use dotenv::dotenv;
+use std::env;
+use std::{fmt::Display, net::SocketAddr, str::FromStr, sync::Arc};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::broadcast::{self, Receiver, Sender},
@@ -24,13 +25,16 @@ const MAX_MESSAGES: usize = 128;
 // 接受广播，写入网络流（过滤发送者）
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenv().ok();
+    let host = env::var("CHAT_HOST").expect("无法读取监听地址");
+
     let (tx, mut _rx) = broadcast::channel::<Arc<Msg>>(MAX_MESSAGES);
     let layer = tracing_subscriber::fmt::Layer::new().with_filter(LevelFilter::INFO);
     tracing_subscriber::registry().with(layer).init();
 
     // console_subscriber::init();
 
-    let server_socket: SocketAddr = SocketAddr::from_str("127.0.0.1:9090")?;
+    let server_socket: SocketAddr = SocketAddr::from_str(&host)?;
 
     let listen = TcpListener::bind(server_socket).await?;
     info!("Chat server listen on {server_socket}");
@@ -75,7 +79,7 @@ async fn handle_client(
     // 广播登录信息
     let msg = MsgBuilder::default()
         .sender_socket(client_socket)
-        .msg_body(MsgBody::joined(user_name.clone()))
+        .msg_body(MsgBody::joined(&user_name))
         .build()?;
     let join_msg = Arc::new(msg);
 
@@ -138,7 +142,7 @@ async fn handle_msg_from_client(
 
         let msg = MsgBuilder::default()
             .sender_socket(client_socket)
-            .msg_body(MsgBody::chat(user_name.clone(), line))
+            .msg_body(MsgBody::chat(&user_name, &line))
             .build()?;
         let chat_msg = Arc::new(msg);
 
@@ -152,7 +156,7 @@ async fn handle_msg_from_client(
     // 广播登出信息
     let msg = MsgBuilder::default()
         .sender_socket(client_socket)
-        .msg_body(MsgBody::left(user_name.clone()))
+        .msg_body(MsgBody::left(&user_name))
         .build()?;
     let left_msg = Arc::new(msg);
     if let Err(e) = tx.send(left_msg) {
@@ -195,14 +199,21 @@ enum MsgBody {
 }
 
 impl MsgBody {
-    fn joined(user_name: String) -> Self {
-        Self::UserJoined { who: user_name }
+    fn joined(user_name: &str) -> Self {
+        Self::UserJoined {
+            who: user_name.to_owned(),
+        }
     }
-    fn left(user_name: String) -> Self {
-        Self::UserLeft { who: user_name }
+    fn left(user_name: &str) -> Self {
+        Self::UserLeft {
+            who: user_name.to_owned(),
+        }
     }
-    fn chat(sender: String, content: String) -> Self {
-        Self::Chat { sender, content }
+    fn chat(sender: &str, content: &str) -> Self {
+        Self::Chat {
+            sender: sender.to_string(),
+            content: content.to_string(),
+        }
     }
 }
 
