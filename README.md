@@ -30,8 +30,8 @@
 - rm -rf /home/vscode/.cargo/advisory-db/
 - git clone https://github.com/RustSec/advisory-db.git /home/vscode/.cargo/advisory-db/github.com-2f857891b7f43c59
 
-- git tag -a v5-ecosystem-url-shortener
-- git push origin v5-ecosystem-url-shortener
+- git tag -a v4-ecosystem-url-shortener
+- git push origin v4-ecosystem-url-shortener
 
 # sqlx macros
 
