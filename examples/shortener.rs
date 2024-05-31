@@ -8,38 +8,42 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use dotenv::dotenv;
 use hyper::StatusCode;
 use serde::Deserialize;
 use serde_json::json;
 use sqlx::{FromRow, PgPool};
+use std::env;
 use tokio::net::TcpListener;
 use tracing::{info, level_filters::LevelFilter, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
 use url::Url;
 
-const HOST: &str = "127.0.0.1:3000";
-const PG_URL: &str = "postgres://kindy:kindy@localhost:5432/shortener";
 const MAX_SHORTEN_TRY: u8 = 3;
 const MAX_ID_LEN: usize = 6; // 6位大小写字母+数字已经形成足够大的取值空间
 const UNIQUE_CONSTRAINT_ERROR: &str = "23505"; // PostgreSQL 23505: duplicate key value violates unique constraint
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenv().ok();
+    let pg_url = env::var("PG_URL").expect("无法读取数据库连接");
+    let host = env::var("HOST").expect("无法读取监听地址");
+
     let layer = tracing_subscriber::fmt::Layer::new().with_filter(LevelFilter::INFO);
     tracing_subscriber::registry().with(layer).init();
 
     // info!("HOST: {}", HOST);
     // info!("PG_URL: {}", PG_URL);
 
-    let shared_state = Arc::new(AppState::try_new(PG_URL).await?);
+    let shared_state = Arc::new(AppState::try_new(&pg_url, &host).await?);
 
     let app = Router::new()
         .route("/:id", get(redirect))
         .route("/shortener", post(shorten))
         .with_state(shared_state);
 
-    let listener = TcpListener::bind(HOST).await?;
-    info!("URL shortener serve in {HOST}");
+    let listener = TcpListener::bind(&host).await?;
+    info!("URL shortener serve in {host}");
     axum::serve(listener, app).await?;
     info!("URL shortener exit");
     Ok(())
@@ -103,7 +107,7 @@ async fn shorten(
     Ok((
         StatusCode::CREATED,
         Json(json!({
-            "url": format!("http://{HOST}/{id}")
+            "url": format!("http://{}/{id}",&state.host)
         })),
     ))
 }
@@ -116,11 +120,12 @@ struct UrlRecord {
     url: String,
 }
 struct AppState {
+    host: String,
     pool: PgPool,
 }
 
 impl AppState {
-    async fn try_new(pg_url: &str) -> Result<Self, ShortenError> {
+    async fn try_new(pg_url: &str, host: &str) -> Result<Self, ShortenError> {
         let pool = PgPool::connect(pg_url).await?;
         // Create table if not exists
         sqlx::query(
@@ -133,7 +138,10 @@ impl AppState {
         )
         .execute(&pool)
         .await?;
-        Ok(Self { pool })
+        Ok(Self {
+            pool,
+            host: host.to_string(),
+        })
     }
 
     async fn shorten(&self, url: &str) -> Result<String, ShortenError> {
